@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+work/
+output/
+*.wav
+*.mp3
+transcript.txt

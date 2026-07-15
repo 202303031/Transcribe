@@ -1,0 +1,11 @@
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.4
+python-dotenv==1.0.1
+openai==1.59.6
+# Saaras v3 and the `mode` parameter (codemix/translit/transcribe) only exist
+# from 0.1.28 on. Older releases fail with "unexpected keyword argument 'mode'".
+sarvamai>=0.1.28
+# Unpinned on purpose: YouTube changes its extractors constantly and a stale
+# yt-dlp is the #1 cause of "download failed". Upgrade it when things break.
+yt-dlp

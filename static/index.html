@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Transcribe — YouTube to clean text</title>
+  <link rel="stylesheet" href="/style.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>🎙️</text></svg>" />
+</head>
+<body>
+  <div class="glow" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">◗</span>
+      <span class="brand-name">Transcribe</span>
+    </div>
+    <button id="keysBtn" class="ghost-btn" type="button">
+      <span class="key-dot" id="keyDot"></span> API keys
+    </button>
+  </header>
+
+  <main>
+    <section class="hero">
+      <h1>YouTube in. <span class="grad">Clean transcript</span> out.</h1>
+      <p class="sub">Pick the language, and we route to the right speech model — then a second pass rewrites the raw output into something you'd actually want to read.</p>
+    </section>
+
+    <form id="form" class="card">
+      <label class="field">
+        <span class="field-label">Video URL</span>
+        <div class="url-wrap">
+          <svg class="url-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
+            <path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7" />
+            <path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" />
+          </svg>
+          <input id="url" type="url" placeholder="https://www.youtube.com/watch?v=…" required autocomplete="off" spellcheck="false" />
+        </div>
+      </label>
+
+      <fieldset class="field">
+        <legend class="field-label">What language is the video in?</legend>
+        <div class="lang-grid">
+          <label class="lang-card">
+            <input type="radio" name="language" value="english" checked />
+            <div class="lang-body">
+              <div class="lang-top">
+                <span class="lang-name">English</span>
+                <span class="check" aria-hidden="true"></span>
+              </div>
+              <p class="lang-desc">Spoken entirely in English.</p>
+              <span class="engine">OpenAI Whisper</span>
+            </div>
+          </label>
+
+          <label class="lang-card">
+            <input type="radio" name="language" value="hinglish" />
+            <div class="lang-body">
+              <div class="lang-top">
+                <span class="lang-name">Hindi + English</span>
+                <span class="check" aria-hidden="true"></span>
+              </div>
+              <p class="lang-desc">Code-mixed Hinglish, as actually spoken.</p>
+              <span class="engine engine-alt">Sarvam Saaras v3</span>
+            </div>
+          </label>
+        </div>
+      </fieldset>
+
+      <details class="advanced">
+        <summary>Advanced options</summary>
+        <div class="adv-grid">
+          <label class="mini">
+            <span>Speech model <em>(English)</em></span>
+            <select id="transcribeModel">
+              <option value="gpt-4o-transcribe">gpt-4o-transcribe</option>
+              <option value="gpt-4o-mini-transcribe">gpt-4o-mini-transcribe</option>
+              <option value="whisper-1">whisper-1</option>
+            </select>
+          </label>
+
+          <label class="mini">
+            <span>Refinement model</span>
+            <select id="refineModel">
+              <option value="gpt-4o">gpt-4o</option>
+              <option value="gpt-4o-mini">gpt-4o-mini</option>
+              <option value="gpt-4.1">gpt-4.1</option>
+            </select>
+          </label>
+
+          <label class="mini">
+            <span>Hinglish script <em>(Sarvam)</em></span>
+            <select id="sarvamMode">
+              <option value="codemix">codemix — मेरा phone number है</option>
+              <option value="translit">translit — mera phone number hai</option>
+              <option value="transcribe">transcribe — मेरा फोन नंबर है</option>
+            </select>
+          </label>
+
+          <label class="mini toggle-row">
+            <span>Separate speakers <em>(Sarvam)</em></span>
+            <span class="switch">
+              <input type="checkbox" id="diarize" />
+              <span class="slider"></span>
+            </span>
+          </label>
+        </div>
+      </details>
+
+      <button id="go" class="primary-btn" type="submit">
+        <span class="btn-label">Transcribe</span>
+        <svg class="btn-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M5 12h14M13 6l6 6-6 6" />
+        </svg>
+      </button>
+
+      <p id="formError" class="form-error" hidden></p>
+    </form>
+
+    <section id="progress" class="card progress" hidden>
+      <div class="progress-head">
+        <h2 id="videoTitle">Working…</h2>
+        <span id="videoMeta" class="meta"></span>
+      </div>
+      <ol class="steps">
+        <li class="step" data-step="fetch">
+          <span class="dot"></span>
+          <div><strong>Fetch audio</strong><em class="detail">Waiting</em></div>
+        </li>
+        <li class="step" data-step="transcribe">
+          <span class="dot"></span>
+          <div><strong>Transcribe</strong><em class="detail">Waiting</em></div>
+        </li>
+        <li class="step" data-step="refine">
+          <span class="dot"></span>
+          <div><strong>Refine language</strong><em class="detail">Waiting</em></div>
+        </li>
+      </ol>
+    </section>
+
+    <section id="results" hidden>
+      <article class="card panel" id="rawPanel" hidden>
+        <div class="panel-head">
+          <div>
+            <h2>Raw transcript</h2>
+            <p class="panel-sub" id="rawEngine">Straight from the speech model</p>
+          </div>
+          <div class="panel-actions">
+            <button class="ghost-btn sm" data-copy="rawText" type="button">Copy</button>
+            <button class="ghost-btn sm" data-download="rawText" data-name="transcript-raw.txt" type="button">Download</button>
+          </div>
+        </div>
+        <pre class="text" id="rawText"></pre>
+      </article>
+
+      <article class="card panel featured" id="refinedPanel" hidden>
+        <div class="panel-head">
+          <div>
+            <h2>Refined transcript <span class="pill">polished</span></h2>
+            <p class="panel-sub" id="refineEngine">Punctuated, de-filtered, paragraphed</p>
+          </div>
+          <div class="panel-actions">
+            <button class="ghost-btn sm" data-copy="refinedText" type="button">Copy</button>
+            <button class="ghost-btn sm" data-download="refinedText" data-name="transcript-refined.txt" type="button">Download</button>
+          </div>
+        </div>
+        <pre class="text" id="refinedText"></pre>
+      </article>
+    </section>
+  </main>
+
+  <dialog id="keysModal" class="modal">
+    <form method="dialog" class="modal-inner">
+      <h2>API keys</h2>
+      <p class="modal-sub">Stored in this browser only (localStorage) and sent straight to your own backend. Never committed to the repo.</p>
+
+      <label class="field">
+        <span class="field-label">OpenAI API key <em>— transcription (English) + refinement</em></span>
+        <input id="openaiKey" type="password" placeholder="sk-…" autocomplete="off" spellcheck="false" />
+      </label>
+
+      <label class="field">
+        <span class="field-label">Sarvam API key <em>— Hinglish transcription</em></span>
+        <input id="sarvamKey" type="password" placeholder="sk_…" autocomplete="off" spellcheck="false" />
+      </label>
+
+      <div class="modal-actions">
+        <button class="ghost-btn" value="cancel" type="submit">Cancel</button>
+        <button class="primary-btn sm" id="saveKeys" value="save" type="submit">Save keys</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="/app.js"></script>
+</body>
+</html>
