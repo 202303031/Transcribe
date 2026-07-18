@@ -22,7 +22,27 @@ from typing import Callable, Literal
 from openai import OpenAI
 from sarvamai import SarvamAI
 
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_openai import OpenAIEmbeddings
+from langchain_chroma import Chroma
+from langchain_core.documents import Document
+
 Progress = Callable[[str], None]
+
+# Retrieval chunking is separate from the two chunkers above: those split
+# *audio* to respect vendor upload limits, this splits the *finished text*
+# into semantically-sized passages for embedding/retrieval. 1000 chars with
+# 150 overlap keeps each chunk a coherent thought without losing context at
+# the seams when a question's answer straddles a boundary.
+RAG_CHUNK_CHARS = 1000
+RAG_CHUNK_OVERLAP = 150
+RAG_TOP_K = 4
+
+_ANSWER_SYSTEM_PROMPT = """You are answering questions about a video using only \
+the transcript excerpts you're given as context. Answer using only that \
+context. If the answer isn't in the context, say so plainly instead of \
+guessing. Keep answers concise and cite specific details (names, numbers, \
+claims) from the excerpts where relevant."""
 
 # Invoke yt-dlp through the interpreter that is running us, rather than as a
 # bare `yt-dlp` binary. The console script lives in the venv's bin/, which is
@@ -282,6 +302,58 @@ def refine(text: str, job: Job, progress: Progress) -> str:
         refined.append((resp.choices[0].message.content or "").strip())
 
     return "\n\n".join(p for p in refined if p)
+
+
+# --------------------------------------------------------------- RAG
+
+
+def build_index(text: str, job: Job, persist_dir: Path, progress: Progress) -> Chroma:
+    """Split the refined transcript into passages, embed them, and store the
+    vectors in a local Chroma collection so `answer_question` can retrieve
+    relevant passages later instead of re-reading the whole transcript.
+    """
+    progress("Splitting transcript into passages")
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=RAG_CHUNK_CHARS,
+        chunk_overlap=RAG_CHUNK_OVERLAP,
+        separators=["\n\n", "\n", ". ", " ", ""],
+    )
+    passages = splitter.split_text(text)
+    docs = [Document(page_content=p, metadata={"chunk": i}) for i, p in enumerate(passages)]
+
+    progress(f"Embedding {len(docs)} passage(s)")
+    embeddings = OpenAIEmbeddings(api_key=job.openai_key, model="text-embedding-3-small")
+
+    progress("Writing to vector store")
+    persist_dir.mkdir(parents=True, exist_ok=True)
+    vectordb = Chroma.from_documents(
+        documents=docs,
+        embedding=embeddings,
+        persist_directory=str(persist_dir),
+    )
+    return vectordb
+
+
+def answer_question(vectordb: Chroma, question: str, job: Job) -> str:
+    """Retrieval-augmented answer: pull the top-k most similar passages from
+    the vector store, hand them to the LLM as context, and ask it to answer
+    strictly from that context rather than from general knowledge.
+    """
+    hits = vectordb.similarity_search(question, k=RAG_TOP_K)
+    if not hits:
+        return "I couldn't find anything in this transcript relevant to that question."
+
+    context = "\n\n---\n\n".join(doc.page_content for doc in hits)
+    client = OpenAI(api_key=job.openai_key)
+    resp = client.chat.completions.create(
+        model=job.refine_model,
+        messages=[
+            {"role": "system", "content": _ANSWER_SYSTEM_PROMPT},
+            {"role": "user", "content": f"Transcript excerpts:\n\n{context}\n\nQuestion: {question}"},
+        ],
+        temperature=0.2,
+    )
+    return (resp.choices[0].message.content or "").strip()
 
 
 # ------------------------------------------------------------ preflight

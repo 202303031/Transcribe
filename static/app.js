@@ -5,6 +5,11 @@ const goBtn = $("go");
 const formError = $("formError");
 const progress = $("progress");
 const results = $("results");
+const askForm = $("askForm");
+const askThread = $("askThread");
+const askInput = $("askInput");
+
+let currentJobId = null;
 
 const KEYS = "yt-transcriber-keys";
 
@@ -65,6 +70,9 @@ function resetUI() {
   results.hidden = true;
   $("rawPanel").hidden = true;
   $("refinedPanel").hidden = true;
+  $("askPanel").hidden = true;
+  askThread.innerHTML = "";
+  currentJobId = null;
   $("rawText").textContent = "";
   $("refinedText").textContent = "";
   $("videoTitle").textContent = "Working…";
@@ -166,6 +174,12 @@ form.addEventListener("submit", async (e) => {
         $("refinedText").textContent = msg.text;
         break;
 
+      case "indexed":
+        currentJobId = jobId;
+        $("askPanel").hidden = false;
+        $("askThread").innerHTML = "";
+        break;
+
       case "error":
         failCurrentStep("Failed");
         showError(msg.message);
@@ -187,6 +201,50 @@ form.addEventListener("submit", async (e) => {
     failCurrentStep("Connection lost");
     showError("Lost connection to the server. Is it still running?");
   };
+});
+
+/* ----------------------------------------------------------- ask/RAG */
+
+askForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const question = askInput.value.trim();
+  if (!question || !currentJobId) return;
+
+  const qEl = document.createElement("div");
+  qEl.className = "ask-q";
+  qEl.textContent = question;
+  askThread.appendChild(qEl);
+
+  const aEl = document.createElement("div");
+  aEl.className = "ask-a pending";
+  aEl.textContent = "Thinking…";
+  askThread.appendChild(aEl);
+  aEl.scrollIntoView({ behavior: "smooth", block: "end" });
+
+  askInput.value = "";
+  askInput.disabled = true;
+
+  try {
+    const res = await fetch(`/api/jobs/${currentJobId}/ask`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.detail || `Request failed (${res.status})`);
+    }
+    const { answer } = await res.json();
+    aEl.classList.remove("pending");
+    aEl.textContent = answer;
+  } catch (err) {
+    aEl.classList.remove("pending");
+    aEl.classList.add("failed");
+    aEl.textContent = err.message;
+  } finally {
+    askInput.disabled = false;
+    askInput.focus();
+  }
 });
 
 /* ---------------------------------------------------- copy/download */

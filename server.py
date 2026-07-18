@@ -29,6 +29,17 @@ STATIC = Path(__file__).parent / "static"
 # single SSE listener; entries are dropped once the stream closes.
 JOBS: dict[str, asyncio.Queue] = {}
 
+# job_id -> Chroma vector store, built once refinement finishes. Kept around
+# (in-memory, per-process — see README caveats) so /ask can query it after
+# the SSE stream for that job has already closed.
+INDEXES: dict[str, "pipeline.Chroma"] = {}
+
+# job_id -> Job, kept alongside INDEXES so /ask has the OpenAI key needed for
+# embeddings and chat completions without asking the client to resend it.
+JOB_META: dict[str, Job] = {}
+
+INDEX_ROOT = Path(tempfile.gettempdir()) / "ytx-indexes"
+
 
 class TranscribeRequest(BaseModel):
     url: str
@@ -40,6 +51,10 @@ class TranscribeRequest(BaseModel):
     refine_model: str = "gpt-4o"
     diarize: bool = False
     num_speakers: int = Field(default=2, ge=1, le=10)
+
+
+class AskRequest(BaseModel):
+    question: str
 
 
 @app.get("/")
@@ -98,6 +113,23 @@ async def stream(job_id: str) -> StreamingResponse:
     )
 
 
+@app.post("/api/jobs/{job_id}/ask")
+async def ask(job_id: str, req: AskRequest) -> dict[str, str]:
+    vectordb = INDEXES.get(job_id)
+    job = JOB_META.get(job_id)
+    if vectordb is None or job is None:
+        raise HTTPException(
+            404,
+            "No transcript index for this job yet — wait for the 'index' stage to finish, "
+            "or this job has expired from server memory.",
+        )
+    if not req.question.strip():
+        raise HTTPException(400, "Question cannot be empty.")
+
+    answer = await asyncio.to_thread(pipeline.answer_question, vectordb, req.question.strip(), job)
+    return {"answer": answer}
+
+
 async def _run_job(job_id: str, job: Job) -> None:
     queue = JOBS[job_id]
     loop = asyncio.get_running_loop()
@@ -154,6 +186,15 @@ async def _run_job(job_id: str, job: Job) -> None:
         refined = await asyncio.to_thread(pipeline.refine, transcript, job, note("refine"))
         stage("refine", "done", f"{len(refined.split()):,} words")
         emit({"type": "refined", "text": refined})
+
+        stage("index", "running", "Embedding transcript for Q&A")
+        vectordb = await asyncio.to_thread(
+            pipeline.build_index, refined, job, INDEX_ROOT / job_id, note("index")
+        )
+        INDEXES[job_id] = vectordb
+        JOB_META[job_id] = job
+        stage("index", "done", "Ready for questions")
+        emit({"type": "indexed"})
 
         emit({"type": "done"})
 

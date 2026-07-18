@@ -135,6 +135,10 @@
           <span class="dot"></span>
           <div><strong>Refine language</strong><em class="detail">Waiting</em></div>
         </li>
+        <li class="step" data-step="index">
+          <span class="dot"></span>
+          <div><strong>Index for Q&amp;A</strong><em class="detail">Waiting</em></div>
+        </li>
       </ol>
     </section>
 
@@ -166,6 +170,20 @@
         </div>
         <pre class="text" id="refinedText"></pre>
       </article>
+    </section>
+
+    <section id="askPanel" class="card panel" hidden>
+      <div class="panel-head">
+        <div>
+          <h2>Ask about this video</h2>
+          <p class="panel-sub">Retrieval over the embedded transcript, answered by an LLM</p>
+        </div>
+      </div>
+      <div id="askThread" class="ask-thread"></div>
+      <form id="askForm" class="ask-form">
+        <input id="askInput" type="text" placeholder="e.g. What did they say about pricing?" autocomplete="off" />
+        <button id="askGo" class="primary-btn sm" type="submit">Ask</button>
+      </form>
     </section>
   </main>
 

@@ -9,3 +9,9 @@ sarvamai>=0.1.28
 # Unpinned on purpose: YouTube changes its extractors constantly and a stale
 # yt-dlp is the #1 cause of "download failed". Upgrade it when things break.
 yt-dlp
+
+# --- RAG layer: chunk the refined transcript, embed it, store it, retrieve it ---
+langchain-text-splitters==0.3.5
+langchain-openai==0.2.14
+langchain-chroma==0.2.0
+chromadb==0.5.23

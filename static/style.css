@@ -495,6 +495,54 @@ select:focus { outline: 0; border-color: rgba(124, 92, 255, 0.6); }
 .text::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 4px; }
 .text::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.18); }
 
+/* ------------------------------------------------------------ ask/RAG */
+
+.ask-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  max-height: 20rem;
+  overflow-y: auto;
+  margin-bottom: 1rem;
+}
+
+.ask-q {
+  align-self: flex-end;
+  max-width: 85%;
+  padding: 0.6rem 0.9rem;
+  border-radius: 11px 11px 2px 11px;
+  background: rgba(124, 92, 255, 0.16);
+  font-size: 0.88rem;
+}
+
+.ask-a {
+  align-self: flex-start;
+  max-width: 85%;
+  padding: 0.6rem 0.9rem;
+  border-radius: 11px 11px 11px 2px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--card-line);
+  font-size: 0.88rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.ask-a.pending { color: var(--faint); font-style: italic; }
+.ask-a.failed { color: #fda4af; border-color: rgba(251, 113, 133, 0.3); }
+
+.ask-form { display: flex; gap: 0.6rem; }
+.ask-form input {
+  flex: 1;
+  padding: 0.7rem 0.9rem;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid var(--card-line);
+  border-radius: 10px;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.9rem;
+}
+.ask-form input:focus { outline: 0; border-color: rgba(124, 92, 255, 0.6); }
+
 /* -------------------------------------------------------------- modal */
 
 .modal {
